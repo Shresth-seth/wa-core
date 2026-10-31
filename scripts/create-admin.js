@@ -20,7 +20,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const db = require(path.join(__dirname, '..', 'src', 'database'));
+const db = require(path.join(__dirname, '..', 'src', 'services', 'database'));
 
 function randomPassword() {
     return crypto.randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
@@ -35,22 +35,22 @@ function randomPassword() {
     const password = passwordArg || randomPassword();
     const businessName = businessNameArg || 'My Business';
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const existing = db.getUserByEmail(email);
+    const passwordHash = await bcrypt.hash(password, 12);
+    const existing = await db.getUserByEmail(email);
     let user;
 
     if (existing) {
-        user = db.updateUser(existing.id, {
+        user = await db.updateUser(existing.id, {
             role: 'admin',
             status: 'active',
             password_hash: passwordHash
         });
         console.log(`Updated existing account #${user.id} (${email}) -> role=admin, status=active, password reset.`);
     } else {
-        user = db.createUser({ email, passwordHash, businessName, ownerName: '' });
+        user = await db.createUser({ email, passwordHash, businessName, ownerName: '' });
         // createUser only auto-assigns admin to the very first-ever signup;
         // force it here so this works no matter how many accounts already exist.
-        user = db.updateUser(user.id, { role: 'admin', status: 'active' });
+        user = await db.updateUser(user.id, { role: 'admin', status: 'active' });
         console.log(`Created new admin account #${user.id} (${email}).`);
     }
 
@@ -63,6 +63,8 @@ function randomPassword() {
         console.log('(This password was auto-generated and is only ever shown here — save it now.');
         console.log(' Re-run this script anytime with an email + password to reset it.)');
     }
+
+    await db.closeDatabase();
 })().catch(err => {
     console.error('Failed:', err);
     process.exit(1);
